@@ -160,7 +160,12 @@ impl CMap {
             }
             let offset = (code - range.lo) as usize;
             return match &range.dst {
-                RangeDst::List(items) => items.get(offset).cloned(),
+                RangeDst::List(items) => match items.get(offset).cloned() {
+                    Some(text) => Some(text),
+                    // A short list has no mapping for this code; a later
+                    // overlapping range still may.
+                    None => continue,
+                },
                 RangeDst::Incrementing(start) => Some(increment_last_unit(start, offset as u32)),
             };
         }
@@ -826,6 +831,15 @@ end";
         let cmap = CMap::parse(src.as_bytes());
         assert_eq!(cmap.get(0x0200).as_deref(), Some("\u{0627}"));
         assert_eq!(cmap.get(0x0202).as_deref(), Some("\u{0629}"));
+    }
+
+    #[test]
+    fn short_bfrange_list_does_not_shadow_a_later_range() {
+        // Truncated array: it names only 0x0100 of the 0x0100–0x0101 range.
+        let src = "2 beginbfrange\n<0100> <0101> [<0041>]\n<0101> <0101> <0042>\nendbfrange";
+        let cmap = CMap::parse(src.as_bytes());
+        assert_eq!(cmap.get(0x0100).as_deref(), Some("A"));
+        assert_eq!(cmap.get(0x0101).as_deref(), Some("B"));
     }
 
     #[test]
