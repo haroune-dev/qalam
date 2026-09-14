@@ -98,7 +98,7 @@ while ligatures are still single glyphs, then normalises.
 ## using pip 
 
 ```sh
-pip install qalam==0.1.0
+pip install qalam
 ```
 if you have some problem build from the project
 
