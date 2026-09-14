@@ -729,14 +729,14 @@ dependencies = [
 
 [[package]]
 name = "qalam-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "qalam-core",
 ]
 
 [[package]]
 name = "qalam-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "image",
  "lopdf",
@@ -747,7 +747,7 @@ dependencies = [
 
 [[package]]
 name = "qalam-py"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "pyo3",
  "qalam-core",
