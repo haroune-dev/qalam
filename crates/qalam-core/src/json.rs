@@ -17,20 +17,19 @@ use crate::types::Rect;
 
 #[derive(Debug, Serialize)]
 struct JsonDocument<'a> {
-    source: &'a str,
     page_count: usize,
-    pages: Vec<JsonPage>,
+    pages: Vec<JsonPage<'a>>,
 }
 
 #[derive(Debug, Serialize)]
-struct JsonPage {
+struct JsonPage<'a> {
     number: u32,
     width: f64,
     height: f64,
     rotation: u16,
     verdict: &'static str,
-    score: f64,
-    reasons: Vec<String>,
+    confidence: f64,
+    reasons: &'a [String],
     tagged: bool,
     blocks: Vec<JsonBlock>,
 }
@@ -219,15 +218,14 @@ pub fn to_json(doc: &Document) -> Result<String, serde_json::Error> {
             height: page.height,
             rotation: page.rotation.degrees(),
             verdict: page.report.verdict.as_str(),
-            score: page.report.confidence,
-            reasons: page.report.reasons.clone(),
+            confidence: page.report.confidence,
+            reasons: &page.report.reasons,
             tagged: page.tagged,
             blocks: page.blocks.iter().map(block).collect(),
         })
         .collect();
 
     let document = JsonDocument {
-        source: doc.source(),
         page_count: doc.page_count(),
         pages,
     };

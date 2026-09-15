@@ -39,11 +39,6 @@ use crate::Result;
 #[derive(Debug, Clone)]
 pub struct Document {
     pages: Vec<Page>,
-    /// The path supplied when the document was opened.
-    ///
-    /// This is presentation metadata used by structured serializers.
-    /// It does not participate in extraction.
-    source: String,
 }
 
 /// One extracted page.
@@ -133,7 +128,6 @@ impl Document {
     /// Open a PDF and extract every page.
     pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self> {
         let path = path.as_ref();
-        let source = path.to_string_lossy().into_owned();
         let pdf = Pdf::open(path)?;
 
         // Read the page summaries once. `Pdf::pages` walks the object graph, so
@@ -204,14 +198,10 @@ impl Document {
             });
         }
 
-        Ok(Self { pages, source })
+        Ok(Self { pages })
     }
 
     /// The path supplied when this document was opened.
-    pub(crate) fn source(&self) -> &str {
-        &self.source
-    }
-
     /// Every page, in document order.
     pub fn pages(&self) -> &[Page] {
         &self.pages
