@@ -159,14 +159,15 @@ impl CMap {
                 continue;
             }
             let offset = (code - range.lo) as usize;
-            return match &range.dst {
-                RangeDst::List(items) => match items.get(offset).cloned() {
-                    Some(text) => Some(text),
-                    // A short list has no mapping for this code; a later
-                    // overlapping range still may.
-                    None => continue,
-                },
-                RangeDst::Incrementing(start) => Some(increment_last_unit(start, offset as u32)),
+            match &range.dst {
+                RangeDst::List(items) => {
+                    if let Some(text) = items.get(offset) {
+                        return Some(text.clone());
+                    }
+                }
+                RangeDst::Incrementing(start) => {
+                    return Some(increment_last_unit(start, offset as u32));
+                }
             };
         }
         None
