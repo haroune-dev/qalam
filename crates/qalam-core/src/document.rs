@@ -259,7 +259,7 @@ impl Document {
     ///
     /// This is a presentation layer over the existing extraction model.
     /// It does not rerun extraction or modify the extracted result.
-    pub fn to_json(&self) -> std::result::Result<String, serde_json::Error> {
+    pub fn to_json(&self) -> String {
         crate::json::to_json(self)
     }
 

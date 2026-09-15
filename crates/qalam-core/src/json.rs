@@ -31,65 +31,7 @@ struct JsonPage<'a> {
     confidence: f64,
     reasons: &'a [String],
     tagged: bool,
-    blocks: Vec<JsonBlock>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-enum JsonBlock {
-    #[serde(rename = "paragraph")]
-    Paragraph {
-        reading_index: usize,
-        text: String,
-        bbox: [f64; 4],
-        font_size: Option<f64>,
-        direction: Option<&'static str>,
-        confidence: f64,
-        lines: Vec<JsonLine>,
-    },
-
-    #[serde(rename = "table")]
-    Table {
-        reading_index: usize,
-        bbox: [f64; 4],
-        confidence: f64,
-        row_count: usize,
-        column_count: usize,
-        rows: Vec<Vec<JsonCell>>,
-    },
-
-    #[serde(rename = "image")]
-    Image {
-        reading_index: usize,
-        bbox: Option<[f64; 4]>,
-        is_background: bool,
-        width: Option<u32>,
-        height: Option<u32>,
-        format: Option<String>,
-        file_name: Option<String>,
-        unsupported_reason: Option<String>,
-        dropped_transparency: bool,
-    },
-}
-
-#[derive(Debug, Serialize)]
-struct JsonLine {
-    text: String,
-    bbox: [f64; 4],
-    baseline: f64,
-    font: String,
-    font_size: f64,
-    color: String,
-    direction: &'static str,
-    confidence: f64,
-}
-
-#[derive(Debug, Serialize)]
-struct JsonCell {
-    text: String,
-    row: usize,
-    column: usize,
-    bbox: [f64; 4],
+    blocks: Vec<JsonBlock<'a>>,
 }
 
 fn rect(rect: Rect) -> [f64; 4] {
@@ -103,100 +45,174 @@ fn direction(direction: Direction) -> &'static str {
     }
 }
 
-fn paragraph(block: &crate::blocks::TextBlock) -> JsonBlock {
-    let first = block.lines.first();
-
-    let lines = block
-        .lines
-        .iter()
-        .map(|line| JsonLine {
-            text: line.text.clone(),
-            bbox: rect(line.bbox),
-            baseline: line.baseline,
-            font: line.style.font.clone(),
-            font_size: line.style.size,
-            color: line.style.color.to_css_hex(),
-            direction: direction(line.direction),
-            confidence: line.resolution_rate(),
-        })
-        .collect();
-
-    JsonBlock::Paragraph {
-        reading_index: block.reading_index,
-        text: block.text(),
-        bbox: rect(block.bbox),
-        font_size: first.map(|line| line.style.size),
-        direction: first.map(|line| direction(line.direction)),
-        confidence: block.confidence,
-        lines,
-    }
+#[derive(Debug, Serialize)]
+struct JsonBlock<'a> {
+    reading_index: usize,
+    /// Absent only for an image with no known placement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bbox: Option<[f64; 4]>,
+    #[serde(flatten)]
+    content: Content<'a>,
 }
 
-fn table(block: &crate::blocks::TableBlock) -> JsonBlock {
-    let table = &block.table;
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+enum Content<'a> {
+    #[serde(rename = "paragraph")]
+    Paragraph {
+        text: String,
+        confidence: f64,
+        lines: Vec<JsonLine<'a>>,
+    },
 
-    let rows = table
-        .rows
-        .iter()
-        .map(|row| {
-            row.iter()
-                .map(|cell| JsonCell {
-                    text: cell.text.clone(),
-                    row: cell.row,
-                    column: cell.column,
-                    bbox: rect(cell.bbox),
-                })
-                .collect()
-        })
-        .collect();
+    #[serde(rename = "table")]
+    Table {
+        confidence: f64,
+        row_count: usize,
+        column_count: usize,
+        rows: Vec<Vec<JsonCell<'a>>>,
+    },
 
-    JsonBlock::Table {
-        reading_index: block.reading_index,
-        bbox: rect(table.bbox),
-        confidence: table.confidence,
-        row_count: table.row_count(),
-        column_count: table.column_count(),
-        rows,
-    }
+    #[serde(rename = "image")]
+    Image(JsonImage),
 }
 
-fn image(block: &crate::blocks::ImageBlock) -> JsonBlock {
-    let common = |width, height, format, file_name, unsupported_reason, dropped_transparency| {
-        JsonBlock::Image {
-            reading_index: block.reading_index,
-            bbox: block.bbox.map(rect),
-            is_background: block.is_background,
-            width,
-            height,
-            format,
-            file_name,
-            unsupported_reason,
-            dropped_transparency,
-        }
-    };
-
-    match &block.image {
-        ExtractedImage::Ready(image) => common(
-            Some(image.width),
-            Some(image.height),
-            Some(image.format.extension().to_string()),
-            Some(image.file_name()),
-            None,
-            image.dropped_transparency,
-        ),
-
-        ExtractedImage::Unsupported { reason, .. } => {
-            common(None, None, None, None, Some(reason.clone()), false)
+impl<'a> JsonBlock<'a> {
+    fn new(block: &'a Block) -> Self {
+        match block {
+            Block::Text(block) => Self {
+                reading_index: block.reading_index,
+                bbox: Some(rect(block.bbox)),
+                content: Content::paragraph(block),
+            },
+            Block::Table(block) => Self {
+                reading_index: block.reading_index,
+                bbox: Some(rect(block.table.bbox)),
+                content: Content::table(block),
+            },
+            Block::Image(block) => Self {
+                reading_index: block.reading_index,
+                bbox: block.bbox.map(rect),
+                content: Content::Image(JsonImage::new(block)),
+            },
         }
     }
 }
 
-fn block(block: &Block) -> JsonBlock {
-    match block {
-        Block::Text(block) => paragraph(block),
-        Block::Table(block) => table(block),
-        Block::Image(block) => image(block),
+impl<'a> Content<'a> {
+    fn paragraph(block: &'a crate::blocks::TextBlock) -> Self {
+        let lines = block
+            .lines
+            .iter()
+            .map(|line| JsonLine {
+                text: line.text.as_str(),
+                bbox: rect(line.bbox),
+                baseline: line.baseline,
+                font: line.style.font.as_str(),
+                size: line.style.size,
+                color: line.style.color.to_css_hex(),
+                direction: direction(line.direction),
+                confidence: line.resolution_rate(),
+            })
+            .collect();
+
+        Self::Paragraph {
+            text: block.text(),
+            confidence: block.confidence,
+            lines,
+        }
     }
+
+    fn table(block: &'a crate::blocks::TableBlock) -> Self {
+        let table = &block.table;
+
+        let rows = table
+            .rows
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|cell| JsonCell {
+                        text: cell.text.as_str(),
+                        row: cell.row,
+                        column: cell.column,
+                        bbox: rect(cell.bbox),
+                    })
+                    .collect()
+            })
+            .collect();
+
+        Self::Table {
+            confidence: table.confidence,
+            row_count: table.row_count(),
+            column_count: table.column_count(),
+            rows,
+        }
+    }
+}
+
+fn block(block: &Block) -> JsonBlock<'_> {
+    JsonBlock::new(block)
+}
+
+#[derive(Debug, Serialize)]
+struct JsonLine<'a> {
+    text: &'a str,
+    bbox: [f64; 4],
+    baseline: f64,
+    font: &'a str,
+    size: f64,
+    color: String,
+    direction: &'static str,
+    confidence: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonCell<'a> {
+    text: &'a str,
+    row: usize,
+    column: usize,
+    bbox: [f64; 4],
+}
+
+#[derive(Debug, Serialize)]
+struct JsonImage {
+    is_background: bool,
+    #[serde(flatten)]
+    decoded: Option<DecodedImage>,
+    unsupported_reason: Option<String>,
+}
+
+impl JsonImage {
+    fn new(block: &crate::blocks::ImageBlock) -> Self {
+        match &block.image {
+            ExtractedImage::Ready(image) => Self {
+                is_background: block.is_background,
+                decoded: Some(DecodedImage {
+                    width: image.width,
+                    height: image.height,
+                    format: image.format.extension().to_string(),
+                    file_name: image.file_name(),
+                    dropped_transparency: image.dropped_transparency,
+                }),
+                unsupported_reason: None,
+            },
+
+            ExtractedImage::Unsupported { reason, .. } => Self {
+                is_background: block.is_background,
+                decoded: None,
+                unsupported_reason: Some(reason.clone()),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct DecodedImage {
+    width: u32,
+    height: u32,
+    format: String,
+    file_name: String,
+    dropped_transparency: bool,
 }
 
 /// Serialize an extracted document as pretty-printed JSON.
@@ -204,11 +220,7 @@ fn block(block: &Block) -> JsonBlock {
 /// This is a presentation layer over the existing extraction model. It does
 /// not rerun extraction, change reading order, modify text, or recalculate
 /// recoverability.
-///
-/// The `Result` is intentional: JSON cannot represent non-finite floating
-/// point values. Returning the serialization error is preferable to silently
-/// inventing a value for malformed input.
-pub fn to_json(doc: &Document) -> Result<String, serde_json::Error> {
+pub fn to_json(doc: &Document) -> String {
     let pages = doc
         .pages()
         .iter()
@@ -231,6 +243,7 @@ pub fn to_json(doc: &Document) -> Result<String, serde_json::Error> {
     };
 
     serde_json::to_string_pretty(&document)
+        .expect("JSON serialization of in-memory extraction data should not fail")
 }
 
 #[cfg(test)]

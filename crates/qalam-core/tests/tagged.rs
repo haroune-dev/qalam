@@ -355,3 +355,56 @@ fn an_untagged_document_still_uses_geometry() {
         .text()
         .contains("إرشادي ولا يغني"));
 }
+
+#[test]
+fn json_serializes_the_extracted_document_shape() {
+    let path = write_temp("json", &tagged_pdf());
+    let doc = qalam_core::Document::open(&path).expect("opens");
+
+    let json = doc.to_json();
+    let value: serde_json::Value =
+        serde_json::from_str(&json).expect("Document::to_json should produce valid JSON");
+
+    assert_eq!(value["page_count"], 1);
+
+    let page = &value["pages"][0];
+    assert_eq!(page["number"], 1);
+    assert_eq!(page["width"], 200.0);
+    assert_eq!(page["height"], 200.0);
+    assert_eq!(page["rotation"], 0);
+    assert_eq!(page["verdict"], "ok");
+    assert!(page["confidence"].is_number());
+    assert!(page["reasons"].is_array());
+    assert_eq!(page["tagged"], true);
+
+    let blocks = page["blocks"].as_array().expect("blocks should be an array");
+    assert_eq!(blocks.len(), 2);
+
+    assert_eq!(blocks[0]["type"], "paragraph");
+    assert_eq!(blocks[0]["reading_index"], 0);
+    assert_eq!(blocks[0]["text"], "Alpha");
+    assert!(blocks[0]["bbox"].is_array());
+    assert!(blocks[0]["confidence"].is_number());
+    assert!(blocks[0]["lines"].is_array());
+
+    let line = &blocks[0]["lines"][0];
+    assert_eq!(line["text"], "Alpha");
+    assert!(line["bbox"].is_array());
+    assert!(line["baseline"].is_number());
+    assert!(line["font"].is_string());
+    assert!(line["size"].is_number());
+    assert!(line["color"].is_string());
+    assert!(line["direction"].is_string());
+    assert!(line["confidence"].is_number());
+
+    // The serializer must expose the structure-tree reading order rather than
+    // reconstructing it from the geometry.
+    assert_eq!(blocks[0]["text"], "Alpha");
+    assert_eq!(blocks[1]["text"], "Beta");
+    assert_eq!(blocks[0]["reading_index"], 0);
+    assert_eq!(blocks[1]["reading_index"], 1);
+
+    // These fields were intentionally removed from the public JSON contract.
+    assert!(blocks[0].get("font_size").is_none());
+    assert!(blocks[0].get("direction").is_none());
+}
