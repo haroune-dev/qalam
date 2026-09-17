@@ -64,7 +64,6 @@ enum Content<'a> {
         lines: Vec<JsonLine<'a>>,
     },
 
-    #[serde(rename = "table")]
     Table {
         confidence: f64,
         row_count: usize,
@@ -72,8 +71,7 @@ enum Content<'a> {
         rows: Vec<Vec<JsonCell<'a>>>,
     },
 
-    #[serde(rename = "image")]
-    Image(JsonImage),
+    Image(JsonImage<'a>),
 }
 
 impl<'a> JsonBlock<'a> {
@@ -174,33 +172,34 @@ struct JsonCell<'a> {
 }
 
 #[derive(Debug, Serialize)]
-struct JsonImage {
+struct JsonImage<'a> {
     is_background: bool,
     #[serde(flatten)]
     decoded: Option<DecodedImage>,
-    unsupported_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    unsupported_reason: Option<&'a str>,
 }
 
-impl JsonImage {
-    fn new(block: &ImageBlock) -> Self {
-        match &block.image {
-            ExtractedImage::Ready(image) => Self {
-                is_background: block.is_background,
-                decoded: Some(DecodedImage {
+impl<'a> JsonImage<'a> {
+    fn new(block: &'a ImageBlock) -> Self {
+        let (decoded, unsupported_reason) = match &block.image {
+            ExtractedImage::Ready(image) => (
+                Some(DecodedImage {
                     width: image.width,
                     height: image.height,
-                    format: image.format.extension().to_string(),
+                    format: image.format.extension(),
                     file_name: image.file_name(),
                     dropped_transparency: image.dropped_transparency,
                 }),
-                unsupported_reason: None,
-            },
+                None,
+            ),
+            ExtractedImage::Unsupported { reason, .. } => (None, Some(reason.as_str())),
+        };
 
-            ExtractedImage::Unsupported { reason, .. } => Self {
-                is_background: block.is_background,
-                decoded: None,
-                unsupported_reason: Some(reason.clone()),
-            },
+        Self {
+            is_background: block.is_background,
+            decoded,
+            unsupported_reason,
         }
     }
 }
@@ -209,7 +208,7 @@ impl JsonImage {
 struct DecodedImage {
     width: u32,
     height: u32,
-    format: String,
+    format: &'static str,
     file_name: String,
     dropped_transparency: bool,
 }
