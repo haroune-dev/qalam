@@ -10,7 +10,7 @@
 use serde::Serialize;
 
 use crate::bidi::Direction;
-use crate::blocks::Block;
+use crate::blocks::{Block, ImageBlock, TableBlock, TextBlock};
 use crate::document::Document;
 use crate::images::ExtractedImage;
 use crate::types::Rect;
@@ -99,7 +99,7 @@ impl<'a> JsonBlock<'a> {
 }
 
 impl<'a> Content<'a> {
-    fn paragraph(block: &'a crate::blocks::TextBlock) -> Self {
+    fn paragraph(block: &'a TextBlock) -> Self {
         let lines = block
             .lines
             .iter()
@@ -122,7 +122,7 @@ impl<'a> Content<'a> {
         }
     }
 
-    fn table(block: &'a crate::blocks::TableBlock) -> Self {
+    fn table(block: &'a TableBlock) -> Self {
         let table = &block.table;
 
         let rows = table
@@ -182,7 +182,7 @@ struct JsonImage {
 }
 
 impl JsonImage {
-    fn new(block: &crate::blocks::ImageBlock) -> Self {
+    fn new(block: &ImageBlock) -> Self {
         match &block.image {
             ExtractedImage::Ready(image) => Self {
                 is_background: block.is_background,
