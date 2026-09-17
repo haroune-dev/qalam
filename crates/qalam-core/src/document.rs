@@ -127,7 +127,6 @@ impl Page {
 impl Document {
     /// Open a PDF and extract every page.
     pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self> {
-        let path = path.as_ref();
         let pdf = Pdf::open(path)?;
 
         // Read the page summaries once. `Pdf::pages` walks the object graph, so

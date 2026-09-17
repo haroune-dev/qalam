@@ -377,7 +377,9 @@ fn json_serializes_the_extracted_document_shape() {
     assert!(page["reasons"].is_array());
     assert_eq!(page["tagged"], true);
 
-    let blocks = page["blocks"].as_array().expect("blocks should be an array");
+    let blocks = page["blocks"]
+        .as_array()
+        .expect("blocks should be an array");
     assert_eq!(blocks.len(), 2);
 
     assert_eq!(blocks[0]["type"], "paragraph");
