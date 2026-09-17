@@ -21,6 +21,15 @@ struct JsonDocument<'a> {
     pages: Vec<JsonPage<'a>>,
 }
 
+impl<'a> JsonDocument<'a> {
+    fn new(doc: &'a Document) -> Self {
+        Self {
+            page_count: doc.page_count(),
+            pages: doc.pages().iter().map(JsonPage::new).collect(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct JsonPage<'a> {
     number: u32,
@@ -74,6 +83,22 @@ enum Content<'a> {
     Image(JsonImage<'a>),
 }
 
+impl<'a> JsonPage<'a> {
+    fn new(page: &'a crate::document::Page) -> Self {
+        Self {
+            number: page.number,
+            width: page.width,
+            height: page.height,
+            rotation: page.rotation.degrees(),
+            verdict: page.report.verdict.as_str(),
+            confidence: page.report.confidence,
+            reasons: &page.report.reasons,
+            tagged: page.tagged,
+            blocks: page.blocks.iter().map(JsonBlock::new).collect(),
+        }
+    }
+}
+
 impl<'a> JsonBlock<'a> {
     fn new(block: &'a Block) -> Self {
         match block {
@@ -119,10 +144,6 @@ impl<'a> Content<'a> {
                 .collect(),
         }
     }
-}
-
-fn block(block: &Block) -> JsonBlock<'_> {
-    JsonBlock::new(block)
 }
 
 #[derive(Debug, Serialize)]
@@ -219,26 +240,7 @@ struct DecodedImage {
 /// not rerun extraction, change reading order, modify text, or recalculate
 /// recoverability.
 pub fn to_json(doc: &Document) -> String {
-    let pages = doc
-        .pages()
-        .iter()
-        .map(|page| JsonPage {
-            number: page.number,
-            width: page.width,
-            height: page.height,
-            rotation: page.rotation.degrees(),
-            verdict: page.report.verdict.as_str(),
-            confidence: page.report.confidence,
-            reasons: &page.report.reasons,
-            tagged: page.tagged,
-            blocks: page.blocks.iter().map(block).collect(),
-        })
-        .collect();
-
-    let document = JsonDocument {
-        page_count: doc.page_count(),
-        pages,
-    };
+    let document = JsonDocument::new(doc);
 
     serde_json::to_string_pretty(&document)
         .expect("JSON serialization of in-memory extraction data should not fail")
