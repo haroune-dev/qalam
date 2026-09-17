@@ -56,10 +56,9 @@ struct JsonBlock<'a> {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "lowercase")]
 enum Content<'a> {
-    #[serde(rename = "paragraph")]
-    Paragraph {
+    Text {
         text: String,
         confidence: f64,
         lines: Vec<JsonLine<'a>>,
@@ -116,7 +115,7 @@ impl<'a> Content<'a> {
             })
             .collect();
 
-        Self::Paragraph {
+        Self::Text {
             text: block.text(),
             confidence: block.confidence,
             lines,

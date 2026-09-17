@@ -353,7 +353,7 @@ mod tests {
             .as_array()
             .expect("blocks should be an array");
 
-        if let Some(paragraph) = blocks.iter().find(|block| block["type"] == "paragraph") {
+        if let Some(paragraph) = blocks.iter().find(|block| block["type"] == "text") {
             assert!(paragraph["reading_index"].is_number());
             assert!(paragraph["bbox"].is_array());
             assert!(paragraph["text"].is_string());
