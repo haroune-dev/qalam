@@ -80,7 +80,7 @@ impl<'a> JsonBlock<'a> {
             Block::Text(block) => Self {
                 reading_index: block.reading_index,
                 bbox: Some(rect(block.bbox)),
-                content: Content::paragraph(block),
+                content: Content::text(block),
             },
             Block::Table(block) => Self {
                 reading_index: block.reading_index,
@@ -97,52 +97,26 @@ impl<'a> JsonBlock<'a> {
 }
 
 impl<'a> Content<'a> {
-    fn paragraph(block: &'a TextBlock) -> Self {
-        let lines = block
-            .lines
-            .iter()
-            .map(|line| JsonLine {
-                text: line.text.as_str(),
-                bbox: rect(line.bbox),
-                baseline: line.baseline,
-                font: line.style.font.as_str(),
-                size: line.style.size,
-                color: line.style.color.to_css_hex(),
-                direction: direction(line.direction),
-                confidence: line.resolution_rate(),
-            })
-            .collect();
-
+    fn text(block: &'a TextBlock) -> Self {
         Self::Text {
             text: block.text(),
             confidence: block.confidence,
-            lines,
+            lines: block.lines.iter().map(JsonLine::new).collect(),
         }
     }
 
     fn table(block: &'a TableBlock) -> Self {
         let table = &block.table;
 
-        let rows = table
-            .rows
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|cell| JsonCell {
-                        text: cell.text.as_str(),
-                        row: cell.row,
-                        column: cell.column,
-                        bbox: rect(cell.bbox),
-                    })
-                    .collect()
-            })
-            .collect();
-
         Self::Table {
             confidence: table.confidence,
             row_count: table.row_count(),
             column_count: table.column_count(),
-            rows,
+            rows: table
+                .rows
+                .iter()
+                .map(|row| row.iter().map(JsonCell::new).collect())
+                .collect(),
         }
     }
 }
@@ -163,12 +137,38 @@ struct JsonLine<'a> {
     confidence: f64,
 }
 
+impl<'a> JsonLine<'a> {
+    fn new(line: &'a crate::arabic::TextLine) -> Self {
+        Self {
+            text: &line.text,
+            bbox: rect(line.bbox),
+            baseline: line.baseline,
+            font: &line.style.font,
+            size: line.style.size,
+            color: line.style.color.to_css_hex(),
+            direction: direction(line.direction),
+            confidence: line.resolution_rate(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct JsonCell<'a> {
     text: &'a str,
     row: usize,
     column: usize,
     bbox: [f64; 4],
+}
+
+impl<'a> JsonCell<'a> {
+    fn new(cell: &'a crate::tables::Cell) -> Self {
+        Self {
+            text: &cell.text,
+            row: cell.row,
+            column: cell.column,
+            bbox: rect(cell.bbox),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
