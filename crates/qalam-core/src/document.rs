@@ -331,6 +331,55 @@ mod tests {
     }
 
     #[test]
+    fn json_serializes_the_extracted_document_shape() {
+        let Some(doc) = fixture() else { return };
+
+        let json = doc.to_json();
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("Document::to_json should produce valid JSON");
+
+        assert_eq!(value["page_count"], 44);
+        assert_eq!(value["pages"][0]["number"], 1);
+        assert_eq!(value["pages"][0]["rotation"], 0);
+        assert!(value["pages"][0]["width"].is_number());
+        assert!(value["pages"][0]["height"].is_number());
+        assert!(value["pages"][0]["verdict"].is_string());
+        assert!(value["pages"][0]["confidence"].is_number());
+        assert!(value["pages"][0]["reasons"].is_array());
+        assert!(value["pages"][0]["tagged"].is_boolean());
+        assert!(value["pages"][0]["blocks"].is_array());
+
+        let blocks = value["pages"][0]["blocks"]
+            .as_array()
+            .expect("blocks should be an array");
+
+        if let Some(paragraph) = blocks.iter().find(|block| block["type"] == "paragraph") {
+            assert!(paragraph["reading_index"].is_number());
+            assert!(paragraph["bbox"].is_array());
+            assert!(paragraph["text"].is_string());
+            assert!(paragraph["confidence"].is_number());
+            assert!(paragraph["lines"].is_array());
+
+            if let Some(line) = paragraph["lines"]
+                .as_array()
+                .and_then(|lines| lines.first())
+            {
+                assert!(line["text"].is_string());
+                assert!(line["bbox"].is_array());
+                assert!(line["baseline"].is_number());
+                assert!(line["font"].is_string());
+                assert!(line["size"].is_number());
+                assert!(line["color"].is_string());
+                assert!(line["direction"].is_string());
+                assert!(line["confidence"].is_number());
+            }
+
+            assert!(paragraph.get("font_size").is_none());
+            assert!(paragraph.get("direction").is_none());
+        }
+    }
+
+    #[test]
     fn the_ligature_regression_survives_the_high_level_api() {
         // PLAN.md §10.1, checked through the API a caller actually uses.
         let Some(doc) = fixture() else { return };
